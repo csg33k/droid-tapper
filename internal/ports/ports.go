@@ -12,6 +12,8 @@ const (
 	KeyPause
 	KeyStart
 	KeyQuit
+	KeySettings
+	KeyBack
 )
 
 // Input is the input port.
@@ -42,4 +44,23 @@ type AudioPlayer interface {
 type ScoreStore interface {
 	LoadHighScore() (int, error)
 	SaveHighScore(score int) error
+}
+
+// Settings holds user preferences.
+type Settings struct {
+	SoundEnabled bool
+	Bindings     map[Key][]int
+}
+
+// SettingsStore is the settings persistence port.
+type SettingsStore interface {
+	LoadSettings() (Settings, error)
+	SaveSettings(Settings) error
+}
+
+// KeyBinder allows rebinding keys at runtime.
+type KeyBinder interface {
+	SetBindings(map[Key][]int)
+	Bindings() map[Key][]int
+	LastKeyPressed() int
 }

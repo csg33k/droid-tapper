@@ -16,6 +16,7 @@ const (
 	StatusPlaying
 	StatusPaused
 	StatusGameOver
+	StatusSettings
 )
 
 // Event emitted by the domain for adapters (audio, etc.).

@@ -22,7 +22,7 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	g.Renderer.Draw(screen, g.Service.Game)
+	g.Renderer.Draw(screen, g.Service.Game, g.Service.Settings, g.Service.SettingsSelected(), g.Service.SettingsEditing())
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
