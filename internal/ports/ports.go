@@ -30,6 +30,7 @@ const (
 	SoundLifeLost
 	SoundLevelUp
 	SoundGameOver
+	SoundExcited
 )
 
 // AudioPlayer is the audio port.

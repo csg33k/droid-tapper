@@ -11,7 +11,9 @@ type Service struct {
 	Audio ports.AudioPlayer
 	Store ports.ScoreStore
 
-	wasGameOver bool
+	wasGameOver  bool
+	leftTapTimer float64
+	leftTapped   bool
 }
 
 func NewService(g *game.Game, in ports.Input, audio ports.AudioPlayer, store ports.ScoreStore) *Service {
@@ -31,6 +33,7 @@ func (s *Service) Update() error {
 
 	// Game over -> allow restart
 	if g.Status == game.StatusGameOver {
+		s.leftTapped = false
 		if s.Input.JustPressed(ports.KeyStart) || s.Input.JustPressed(ports.KeyServe) {
 			g.Start()
 		}
@@ -56,10 +59,7 @@ func (s *Service) Update() error {
 	// Playing input
 	if s.Input.JustPressed(ports.KeyPause) {
 		g.TogglePause()
-		// still tick? no
-		// fall through? We'll return to skip tick this frame.
-		// But pause toggle already applied; skip simulation.
-		// Consume events none.
+		s.leftTapped = false
 		return nil
 	}
 	if s.Input.JustPressed(ports.KeyUp) {
@@ -70,6 +70,22 @@ func (s *Service) Update() error {
 	}
 	if s.Input.JustPressed(ports.KeyServe) {
 		g.Serve()
+	}
+	if s.Input.JustPressed(ports.KeyLeft) {
+		if s.leftTapped && s.leftTapTimer < 0.35 {
+			g.ReturnToTap()
+			s.leftTapped = false
+			s.leftTapTimer = 0
+		} else {
+			s.leftTapped = true
+			s.leftTapTimer = 0
+		}
+	}
+	if s.leftTapped {
+		s.leftTapTimer += 1.0 / 60.0
+		if s.leftTapTimer > 0.35 {
+			s.leftTapped = false
+		}
 	}
 
 	dir := 0
@@ -99,6 +115,8 @@ func (s *Service) Update() error {
 			s.Audio.Play(ports.SoundLevelUp)
 		case game.EventGameOver:
 			s.Audio.Play(ports.SoundGameOver)
+		case game.EventExcited:
+			s.Audio.Play(ports.SoundExcited)
 		}
 	}
 	g.Events = nil

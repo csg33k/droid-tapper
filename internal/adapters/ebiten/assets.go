@@ -2,6 +2,7 @@ package ebiten
 
 import (
 	"image"
+	"image/color"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -9,14 +10,19 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 // Assets holds loaded sprites.
 type Assets struct {
-	Bartender *ebiten.Image
-	Customers []*ebiten.Image
-	Mug       *ebiten.Image
-	EmptyMug  *ebiten.Image
+	Bartender    *ebiten.Image
+	Customers    []*ebiten.Image
+	Mug          *ebiten.Image
+	EmptyMug     *ebiten.Image
+	Exit         *ebiten.Image
+	BarTexture   *ebiten.Image
+	FloorTexture *ebiten.Image
+	ExitDrape    *ebiten.Image
 }
 
 // LoadAssets loads sprites from dir. Missing files are silently skipped.
@@ -49,8 +55,13 @@ func LoadAssets(dir string) *Assets {
 			a.EmptyMug = img
 		case base == "mug":
 			a.Mug = img
+		case base == "exit":
+			a.Exit = img
+		case base == "bar_texture":
+			a.BarTexture = img
 		}
 	}
+	a.Customers = append(a.Customers, generatePenguins()...)
 	return a
 }
 
@@ -90,8 +101,13 @@ func LoadAssetsFS(fsys fs.FS, dir string) *Assets {
 			a.EmptyMug = ei
 		case base == "mug":
 			a.Mug = ei
+		case base == "exit":
+			a.Exit = ei
+		case base == "bar_texture":
+			a.BarTexture = ei
 		}
 	}
+	a.Customers = append(a.Customers, generatePenguins()...)
 	return a
 }
 
@@ -103,6 +119,10 @@ func (a *Assets) customerFor(id int) *ebiten.Image {
 }
 
 func drawSprite(screen *ebiten.Image, img *ebiten.Image, cx, cy, size float64) {
+	drawSpriteTinted(screen, img, cx, cy, size, color.White)
+}
+
+func drawSpriteTinted(screen *ebiten.Image, img *ebiten.Image, cx, cy, size float64, tint color.Color) {
 	if img == nil {
 		return
 	}
@@ -114,5 +134,30 @@ func drawSprite(screen *ebiten.Image, img *ebiten.Image, cx, cy, size float64) {
 	op := &ebiten.DrawImageOptions{}
 	op.GeoM.Scale(scale, scale)
 	op.GeoM.Translate(cx-size/2, cy-size/2)
+	op.ColorScale.ScaleWithColor(tint)
 	screen.DrawImage(img, op)
+}
+
+func generatePenguins() []*ebiten.Image {
+	var out []*ebiten.Image
+	for i := 0; i < 3; i++ {
+		img := ebiten.NewImage(64, 64)
+		// body
+		ebitenutil.DrawRect(img, 16, 8, 32, 48, color.Black)
+		// belly
+		ebitenutil.DrawRect(img, 24, 24, 16, 24, color.White)
+		// eyes
+		vector.DrawFilledCircle(img, 24, 18, 3, color.White, false)
+		vector.DrawFilledCircle(img, 40, 18, 3, color.White, false)
+		// beak
+		ebitenutil.DrawRect(img, 28, 24, 8, 4, color.RGBA{R: 255, G: 165, B: 0, A: 255})
+		// variants
+		if i == 1 {
+			ebitenutil.DrawRect(img, 16, 8, 32, 6, color.RGBA{R: 255, G: 0, B: 0, A: 255})
+		} else if i == 2 {
+			ebitenutil.DrawRect(img, 18, 4, 28, 6, color.RGBA{R: 0, G: 0, B: 255, A: 255})
+		}
+		out = append(out, img)
+	}
+	return out
 }

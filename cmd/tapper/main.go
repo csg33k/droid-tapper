@@ -25,7 +25,7 @@ func main() {
 	cfg := game.DefaultConfig()
 	g := game.NewGame(r, cfg, hs)
 
-	svc := application.NewService(g, ebitenadapter.Input{}, audio.Noop{}, store)
+	svc := application.NewService(g, ebitenadapter.Input{}, audio.New(), store)
 	ebg := ebitenadapter.New(svc)
 	ebg.Renderer.Assets = ebitenadapter.LoadAssetsFS(assets.FS, "sprites")
 

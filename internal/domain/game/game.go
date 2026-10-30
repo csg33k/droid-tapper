@@ -29,6 +29,7 @@ const (
 	EventLifeLost
 	EventLevelUp
 	EventGameOver
+	EventExcited
 )
 
 type CustomerState int
@@ -72,13 +73,13 @@ func DefaultConfig() Config {
 		SatisfiedSpeed:    180,
 		MugSpeed:          360,
 		EmptyMugSpeed:     300,
-		SpawnIntervalBase: 2.5,
-		TargetCountBase:   8,
-		TargetCountPerLvl: 4,
+		SpawnIntervalBase: 3.0,
+		TargetCountBase:   12,
+		TargetCountPerLvl: 6,
 		Lives:             5,
 		ServeScore:        100,
 		CatchScore:        50,
-		LevelClearDelay:   2.0,
+		LevelClearDelay:   3.0,
 		CatchRadius:       96,
 		CustomerReachX:    180,
 		VerticalCooldown:  0.12,
@@ -99,12 +100,13 @@ type Bartender struct {
 }
 
 type Customer struct {
-	ID    int
-	BarID int
-	X     float64
-	VX    float64
-	State CustomerState
-	Speed float64
+	ID      int
+	BarID   int
+	X       float64
+	VX      float64
+	State   CustomerState
+	Speed   float64
+	Excited bool
 }
 
 type Mug struct {
@@ -132,6 +134,7 @@ type Game struct {
 	SpawnTimer        float64
 	LevelClearPending bool
 	LevelClearTimer   float64
+	LevelStartTimer   float64
 
 	RNG    RNG
 	Config Config
@@ -164,6 +167,7 @@ func (g *Game) resetLevelState() {
 	g.SpawnTimer = 0
 	g.LevelClearPending = false
 	g.LevelClearTimer = 0
+	g.LevelStartTimer = 2.0
 	g.Customers = nil
 	g.Mugs = nil
 	g.Bartender = Bartender{BarID: 0, X: g.Config.BarTapX, Intent: 0}
@@ -194,11 +198,23 @@ func (g *Game) MoveVertical(delta int) {
 		return
 	}
 	nb := b.BarID + delta
-	if nb < 0 || nb >= g.Config.BarCount {
-		return
+	if nb < 0 {
+		nb = g.Config.BarCount - 1
+	}
+	if nb >= g.Config.BarCount {
+		nb = 0
 	}
 	b.BarID = nb
 	b.MoveCooldown = g.Config.VerticalCooldown
+}
+
+func (g *Game) ReturnToTap() {
+	if g.Status != StatusPlaying {
+		return
+	}
+	g.Bartender.X = g.Config.BarTapX
+	g.Bartender.Intent = 0
+	g.Bartender.VX = 0
 }
 
 func (g *Game) SetHorizontalIntent(dir int) {
@@ -238,6 +254,12 @@ func (g *Game) Tick(dt float64) {
 	if dt <= 0 {
 		return
 	}
+	if g.LevelStartTimer > 0 {
+		g.LevelStartTimer -= dt
+		if g.LevelStartTimer < 0 {
+			g.LevelStartTimer = 0
+		}
+	}
 
 	// Bartender movement
 	b := &g.Bartender
@@ -275,7 +297,7 @@ func (g *Game) Tick(dt float64) {
 	}
 
 	// Customers
-	custSpeed := g.Config.CustomerSpeed + float64(g.Level-1)*8
+	custSpeed := g.Config.CustomerSpeed + float64(g.Level-1)*4
 	for i := range g.Customers {
 		c := &g.Customers[i]
 		if c.State == CustomerApproaching {
@@ -283,6 +305,10 @@ func (g *Game) Tick(dt float64) {
 				c.Speed = custSpeed
 			}
 			c.X -= c.Speed * dt
+			if !c.Excited && c.X <= 200 {
+				c.Excited = true
+				g.Events = append(g.Events, EventExcited)
+			}
 		} else {
 			if c.Speed == 0 {
 				c.Speed = g.Config.SatisfiedSpeed
@@ -422,7 +448,7 @@ func (g *Game) Tick(dt float64) {
 }
 
 func (g *Game) spawnInterval() float64 {
-	v := g.Config.SpawnIntervalBase / (1 + float64(g.Level-1)*0.12)
+	v := g.Config.SpawnIntervalBase / (1 + float64(g.Level-1)*0.08)
 	if v < 0.7 {
 		v = 0.7
 	}
