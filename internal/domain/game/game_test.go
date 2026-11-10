@@ -121,3 +121,32 @@ func TestGameOverOnZeroLives(t *testing.T) {
 		t.Fatalf("status = %v, want GameOver", g.Status)
 	}
 }
+
+func TestNukeClearsMugs(t *testing.T) {
+	cfg := DefaultConfig()
+	g := NewGame(&fakeRNG{}, cfg, 0)
+	g.Start()
+	g.Mugs = []Mug{
+		{ID: 1, BarID: 0, X: 600, Filled: true},
+		{ID: 2, BarID: 1, X: 700},
+		{ID: 3, BarID: 2, X: 800},
+	}
+	g.Customers = []Customer{
+		{ID: 1, BarID: 0, X: 900, State: CustomerSatisfied, Speed: cfg.SatisfiedSpeed},
+	}
+	g.PowerUps = []PowerUp{{ID: 10, BarID: g.Bartender.BarID, X: g.Bartender.X, Kind: PowerNuke}}
+	lives := g.Lives
+	g.Tick(1.0 / 60.0)
+	if len(g.Mugs) != 0 {
+		t.Fatalf("mugs = %d, want 0", len(g.Mugs))
+	}
+	if g.Lives != lives {
+		t.Fatalf("lives = %d, want %d", g.Lives, lives)
+	}
+	if len(g.PowerUps) != 0 {
+		t.Fatalf("power-ups = %d, want 0 (nuke should be consumed)", len(g.PowerUps))
+	}
+	if len(g.Customers) != 1 || g.Customers[0].State != CustomerApproaching {
+		t.Fatalf("customer did not turn around: %+v", g.Customers)
+	}
+}

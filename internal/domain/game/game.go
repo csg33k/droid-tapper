@@ -31,6 +31,7 @@ const (
 	EventLevelUp
 	EventGameOver
 	EventExcited
+	EventPowerUp
 )
 
 type CustomerState int
@@ -60,6 +61,7 @@ type Config struct {
 	CatchRadius       float64
 	CustomerReachX    float64
 	VerticalCooldown  float64
+	EnabledPowerUps   [4]bool
 }
 
 func DefaultConfig() Config {
@@ -84,6 +86,7 @@ func DefaultConfig() Config {
 		CatchRadius:       96,
 		CustomerReachX:    180,
 		VerticalCooldown:  0.12,
+		EnabledPowerUps:   [4]bool{true, true, true, true},
 	}
 }
 
@@ -118,6 +121,22 @@ type Mug struct {
 	Filled bool
 }
 
+type PowerUpKind int
+
+const (
+	PowerSlowBartender PowerUpKind = iota
+	PowerSpeedBartender
+	PowerSlowCustomers
+	PowerNuke
+)
+
+type PowerUp struct {
+	ID    int
+	BarID int
+	X     float64
+	Kind  PowerUpKind
+}
+
 type Game struct {
 	Status    Status
 	Level     int
@@ -129,13 +148,19 @@ type Game struct {
 	Bartender Bartender
 	Customers []Customer
 	Mugs      []Mug
+	PowerUps  []PowerUp
 
 	SpawnedCount      int
 	TargetCount       int
 	SpawnTimer        float64
+	PowerUpTimer      float64
 	LevelClearPending bool
 	LevelClearTimer   float64
 	LevelStartTimer   float64
+
+	BartenderBoostTimer float64
+	BartenderBoostMult  float64
+	CustomerSlowTimer   float64
 
 	RNG    RNG
 	Config Config
@@ -171,7 +196,12 @@ func (g *Game) resetLevelState() {
 	g.LevelStartTimer = 2.0
 	g.Customers = nil
 	g.Mugs = nil
+	g.PowerUps = nil
 	g.Bartender = Bartender{BarID: 0, X: g.Config.BarTapX, Intent: 0}
+	g.BartenderBoostTimer = 0
+	g.BartenderBoostMult = 1
+	g.CustomerSlowTimer = 0
+	g.PowerUpTimer = 0
 }
 
 func (g *Game) Start() {
@@ -261,6 +291,19 @@ func (g *Game) Tick(dt float64) {
 			g.LevelStartTimer = 0
 		}
 	}
+	if g.BartenderBoostTimer > 0 {
+		g.BartenderBoostTimer -= dt
+		if g.BartenderBoostTimer <= 0 {
+			g.BartenderBoostTimer = 0
+			g.BartenderBoostMult = 1
+		}
+	}
+	if g.CustomerSlowTimer > 0 {
+		g.CustomerSlowTimer -= dt
+		if g.CustomerSlowTimer < 0 {
+			g.CustomerSlowTimer = 0
+		}
+	}
 
 	// Bartender movement
 	b := &g.Bartender
@@ -270,8 +313,12 @@ func (g *Game) Tick(dt float64) {
 			b.MoveCooldown = 0
 		}
 	}
+	bartenderMult := 1.0
+	if g.BartenderBoostTimer > 0 {
+		bartenderMult = g.BartenderBoostMult
+	}
 	if b.Intent != 0 {
-		b.VX = float64(b.Intent) * g.Config.BartenderSpeed
+		b.VX = float64(b.Intent) * g.Config.BartenderSpeed * bartenderMult
 	} else {
 		b.VX = 0
 	}
@@ -298,7 +345,10 @@ func (g *Game) Tick(dt float64) {
 	}
 
 	// Customers
-	custSpeed := g.Config.CustomerSpeed + float64(g.Level-1)*4
+	custSpeed := (g.Config.CustomerSpeed + float64(g.Level-1)*4)
+	if g.CustomerSlowTimer > 0 {
+		custSpeed *= 0.5
+	}
 	for i := range g.Customers {
 		c := &g.Customers[i]
 		if c.State == CustomerApproaching {
@@ -399,6 +449,74 @@ func (g *Game) Tick(dt float64) {
 		aliveCust = append(aliveCust, c)
 	}
 	g.Customers = aliveCust
+
+	// Power-ups
+	var alivePU []PowerUp
+	for _, pu := range g.PowerUps {
+		pu.X -= 90 * dt
+		picked := false
+		if pu.BarID == g.Bartender.BarID && math.Abs(g.Bartender.X-pu.X) <= 32 {
+			picked = true
+			switch pu.Kind {
+			case PowerSlowBartender:
+				if g.BartenderBoostTimer > 0 && g.BartenderBoostMult > 1 {
+					// Crab cancels JS: net zero
+					g.BartenderBoostTimer = 0
+					g.BartenderBoostMult = 1
+				} else {
+					g.BartenderBoostMult = 0.5
+					g.BartenderBoostTimer = 30
+				}
+			case PowerSpeedBartender:
+				if g.BartenderBoostTimer > 0 && g.BartenderBoostMult < 1 {
+					// JS cancels Crab: net zero
+					g.BartenderBoostTimer = 0
+					g.BartenderBoostMult = 1
+				} else {
+					g.BartenderBoostMult = 1.8
+					g.BartenderBoostTimer = 30
+				}
+			case PowerSlowCustomers:
+				g.CustomerSlowTimer = 30
+			case PowerNuke:
+				g.Mugs = nil
+				for i := range g.Customers {
+					g.Customers[i].State = CustomerApproaching
+					g.Customers[i].Speed = 0
+					g.Customers[i].Excited = true
+				}
+			}
+			g.Events = append(g.Events, EventPowerUp)
+		}
+		if picked {
+			continue
+		}
+		if pu.X < -20 {
+			continue
+		}
+		alivePU = append(alivePU, pu)
+	}
+	g.PowerUps = alivePU
+
+	g.PowerUpTimer += dt
+	if g.PowerUpTimer >= 14 {
+		g.PowerUpTimer = 0
+		// choose from enabled power-ups
+		var kinds []PowerUpKind
+		for k := 0; k < len(g.Config.EnabledPowerUps); k++ {
+			if g.Config.EnabledPowerUps[k] {
+				kinds = append(kinds, PowerUpKind(k))
+			}
+		}
+		if len(kinds) == 0 {
+			g.PowerUpTimer = 0
+		} else {
+			barID := g.RNG.Intn(g.Config.BarCount)
+			kind := kinds[g.RNG.Intn(len(kinds))]
+			g.nextID++
+			g.PowerUps = append(g.PowerUps, PowerUp{ID: g.nextID, BarID: barID, X: g.Config.BarLength, Kind: kind})
+		}
+	}
 
 	// Spawner
 	if g.SpawnedCount < g.TargetCount {

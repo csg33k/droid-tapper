@@ -18,6 +18,7 @@ func New() *EbitenAudio {
 	sounds := map[ports.Sound][]byte{
 		ports.SoundBreak:   makeWAV(shatterSamples()),
 		ports.SoundExcited: makeWAV(excitedSamples()),
+		ports.SoundPowerUp: makeWAV(powerUpSamples()),
 		ports.SoundLevelUp: makeWAV(successSamples()),
 	}
 	// reuse shatter for life lost maybe

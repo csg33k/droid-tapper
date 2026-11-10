@@ -34,8 +34,15 @@ func NewService(g *game.Game, in ports.Input, audio ports.AudioPlayer, store por
 	if s.Settings.Bindings == nil {
 		s.Settings.Bindings = map[ports.Key][]int{}
 	}
+	if s.Settings.PowerUps == nil {
+		s.Settings.PowerUps = map[int]bool{0: true, 1: true, 2: true, 3: true}
+	}
 	if len(s.Settings.Bindings) == 0 {
 		s.Settings.SoundEnabled = true
+	}
+	// sync power-up enables to game config
+	for k := 0; k < len(s.Game.Config.EnabledPowerUps); k++ {
+		s.Game.Config.EnabledPowerUps[k] = s.Settings.PowerUps[k]
 	}
 	if kb, ok := in.(ports.KeyBinder); ok {
 		if len(s.Settings.Bindings) > 0 {
@@ -113,7 +120,8 @@ func (s *Service) Update() error {
 		}
 		if s.Input.JustPressed(ports.KeyDown) {
 			// 1 (sound) + number of remappable keys
-			maxIdx := 1 + 8 // sound + 8 actions
+			// sound + 8 remappable keys + power-ups; last index = 8 + number of power-ups
+			maxIdx := 8 + len(s.Game.Config.EnabledPowerUps)
 			if s.settingsSelected < maxIdx {
 				s.settingsSelected++
 			}
@@ -123,11 +131,20 @@ func (s *Service) Update() error {
 				s.Settings.SoundEnabled = !s.Settings.SoundEnabled
 				s.saveSettings()
 			}
-		} else {
+		} else if s.settingsSelected <= 8 {
 			if s.Input.JustPressed(ports.KeyServe) || s.Input.JustPressed(ports.KeyStart) {
 				s.settingsEditing = true
 				keys := []ports.Key{ports.KeyLeft, ports.KeyRight, ports.KeyUp, ports.KeyDown, ports.KeyServe, ports.KeyPause, ports.KeyStart, ports.KeySettings}
 				s.settingsEditKey = keys[s.settingsSelected-1]
+			}
+		} else {
+			if s.Input.JustPressed(ports.KeyLeft) || s.Input.JustPressed(ports.KeyRight) || s.Input.JustPressed(ports.KeyServe) || s.Input.JustPressed(ports.KeyStart) {
+				idx := s.settingsSelected - 9
+				if idx >= 0 && idx < len(s.Game.Config.EnabledPowerUps) {
+					s.Settings.PowerUps[idx] = !s.Settings.PowerUps[idx]
+					s.Game.Config.EnabledPowerUps[idx] = s.Settings.PowerUps[idx]
+					s.saveSettings()
+				}
 			}
 		}
 		return nil
@@ -203,6 +220,8 @@ func (s *Service) Update() error {
 				s.Audio.Play(ports.SoundGameOver)
 			case game.EventExcited:
 				s.Audio.Play(ports.SoundExcited)
+			case game.EventPowerUp:
+				s.Audio.Play(ports.SoundPowerUp)
 			}
 		}
 	}

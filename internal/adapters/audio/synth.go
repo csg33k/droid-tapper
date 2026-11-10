@@ -75,6 +75,19 @@ func catchSamples() []int16 {
 	return out
 }
 
+func powerUpSamples() []int16 {
+	n := sampleRate / 4
+	out := make([]int16, n)
+	for i := range out {
+		t := float64(i) / float64(sampleRate)
+		freq := 800 + 400*math.Sin(t*10)
+		env := math.Exp(-t * 6)
+		v := math.Sin(2 * math.Pi * freq * t)
+		out[i] = int16(v * env * 0.3 * 32767)
+	}
+	return out
+}
+
 func excitedSamples() []int16 {
 	n := sampleRate / 5
 	out := make([]int16, n)

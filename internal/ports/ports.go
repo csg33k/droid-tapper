@@ -33,6 +33,7 @@ const (
 	SoundLevelUp
 	SoundGameOver
 	SoundExcited
+	SoundPowerUp
 )
 
 // AudioPlayer is the audio port.
@@ -50,6 +51,7 @@ type ScoreStore interface {
 type Settings struct {
 	SoundEnabled bool
 	Bindings     map[Key][]int
+	PowerUps     map[int]bool
 }
 
 // SettingsStore is the settings persistence port.

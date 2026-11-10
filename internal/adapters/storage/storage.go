@@ -58,13 +58,14 @@ func (s *JSONStore) LoadSettings() (ports.Settings, error) {
 	data, err := os.ReadFile(s.SettingsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return ports.Settings{SoundEnabled: true, Bindings: map[ports.Key][]int{}}, nil
+			return ports.Settings{SoundEnabled: true, Bindings: map[ports.Key][]int{}, PowerUps: map[int]bool{0: true, 1: true, 2: true, 3: true}}, nil
 		}
 		return ports.Settings{}, err
 	}
 	var v struct {
 		SoundEnabled bool          `json:"sound_enabled"`
 		Bindings     map[int][]int `json:"bindings"`
+		PowerUps     map[int]bool  `json:"power_ups"`
 	}
 	if err := json.Unmarshal(data, &v); err != nil {
 		return ports.Settings{}, err
@@ -73,7 +74,17 @@ func (s *JSONStore) LoadSettings() (ports.Settings, error) {
 	for k, codes := range v.Bindings {
 		bindings[ports.Key(k)] = codes
 	}
-	return ports.Settings{SoundEnabled: v.SoundEnabled, Bindings: bindings}, nil
+	powerUps := map[int]bool{}
+	for k, enabled := range v.PowerUps {
+		powerUps[k] = enabled
+	}
+	// Power-ups added in later versions default to enabled.
+	for k := 0; k < 4; k++ {
+		if _, ok := powerUps[k]; !ok {
+			powerUps[k] = true
+		}
+	}
+	return ports.Settings{SoundEnabled: v.SoundEnabled, Bindings: bindings, PowerUps: powerUps}, nil
 }
 
 func (s *JSONStore) SaveSettings(st ports.Settings) error {
@@ -87,7 +98,8 @@ func (s *JSONStore) SaveSettings(st ports.Settings) error {
 	data, err := json.MarshalIndent(struct {
 		SoundEnabled bool          `json:"sound_enabled"`
 		Bindings     map[int][]int `json:"bindings"`
-	}{SoundEnabled: st.SoundEnabled, Bindings: bindings}, "", "  ")
+		PowerUps     map[int]bool  `json:"power_ups"`
+	}{SoundEnabled: st.SoundEnabled, Bindings: bindings, PowerUps: st.PowerUps}, "", "  ")
 	if err != nil {
 		return err
 	}

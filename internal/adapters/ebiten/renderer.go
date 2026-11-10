@@ -119,7 +119,39 @@ func (r *Renderer) Draw(screen *ebiten.Image, g *game.Game, settings ports.Setti
 		drawTextColored(screen, "EXIT", drapeX+20, int(cfg.ScreenH)/2-40, 4, color.RGBA{R: 80, G: 255, B: 120, A: 255})
 
 		// HUD
-		drawText(screen, fmt.Sprintf("Score: %d   Level: %d   Lives: %d   High: %d", g.Score, g.Level, g.Lives, g.HighScore), 20, 20, 3)
+		hud := fmt.Sprintf("Score: %d   Level: %d   Lives: %d   High: %d", g.Score, g.Level, g.Lives, g.HighScore)
+		if g.BartenderBoostTimer > 0 {
+			if g.BartenderBoostMult < 1 {
+				hud += "   SLOW"
+			} else {
+				hud += "   FAST"
+			}
+		}
+		if g.CustomerSlowTimer > 0 {
+			hud += "   SLOW CUST"
+		}
+		drawText(screen, hud, 20, 20, 3)
+
+		// Active power-up timers (upper right)
+		timerY := 20
+		timerX := int(cfg.ScreenW) - 420
+		if g.BartenderBoostTimer > 0 {
+			icon := r.Assets.PowerJS
+			if g.BartenderBoostMult > 1 {
+				icon = r.Assets.PowerCrab
+			}
+			if icon != nil {
+				drawSprite(screen, icon, float64(timerX)+32, float64(timerY)+32, 64)
+			}
+			drawTextColored(screen, fmt.Sprintf("%ds", int(g.BartenderBoostTimer+0.5)), timerX+80, timerY+12, 3, color.White)
+			timerY += 76
+		}
+		if g.CustomerSlowTimer > 0 {
+			if r.Assets.PowerTS != nil {
+				drawSprite(screen, r.Assets.PowerTS, float64(timerX)+32, float64(timerY)+32, 64)
+			}
+			drawTextColored(screen, fmt.Sprintf("%ds", int(g.CustomerSlowTimer+0.5)), timerX+80, timerY+12, 3, color.White)
+		}
 
 		// Bars
 		for _, bar := range g.Bars {
@@ -172,6 +204,27 @@ func (r *Renderer) Draw(screen *ebiten.Image, g *game.Game, settings ports.Setti
 					col = colorEmpty
 				}
 				ebitenutil.DrawRect(screen, m.X-16, barY-16, 32, 32, col)
+			}
+		}
+
+		// Power-ups
+		for _, pu := range g.PowerUps {
+			barY := g.Bars[pu.BarID].Y
+			var icon *ebiten.Image
+			if r.Assets != nil {
+				switch pu.Kind {
+				case game.PowerSlowBartender:
+					icon = r.Assets.PowerJS
+				case game.PowerSpeedBartender:
+					icon = r.Assets.PowerCrab
+				case game.PowerSlowCustomers:
+					icon = r.Assets.PowerTS
+				case game.PowerNuke:
+					icon = r.Assets.PowerNuke
+				}
+			}
+			if icon != nil {
+				drawSprite(screen, icon, pu.X, barY, 64)
 			}
 		}
 
@@ -235,10 +288,25 @@ func (r *Renderer) Draw(screen *ebiten.Image, g *game.Game, settings ports.Setti
 			}
 			drawText(screen, names, 500, y, 2)
 		}
+		// power-ups
+		puLabels := []string{"Power-up JS (slow you)", "Power-up CRAB (speed you)", "Power-up TS (slow customers)", "Power-up NUKE (clear mugs)"}
+		for i, lab := range puLabels {
+			y := 640 + i*40
+			prefix := "  "
+			if selected == 9+i {
+				prefix = "> "
+			}
+			state := "OFF"
+			if settings.PowerUps[i] {
+				state = "ON"
+			}
+			drawText(screen, prefix+lab+": "+state, 200, y, 2)
+		}
+
 		if editing {
-			drawText(screen, "Press any key to bind...", 200, 660, 2)
+			drawText(screen, "Press any key to bind...", 200, 840, 2)
 		} else {
-			drawText(screen, "Enter on an action to remap. Backspace/Esc to return.", 200, 660, 2)
+			drawText(screen, "Enter on an action to remap. Backspace/Esc to return.", 200, 840, 2)
 		}
 	}
 }
